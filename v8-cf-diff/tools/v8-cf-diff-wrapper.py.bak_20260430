@@ -1,0 +1,45 @@
+import os
+import sys
+import subprocess
+from datetime import datetime
+
+if len(sys.argv) < 2:
+    print("Не указано имя проекта. Пример: python tools/v8-cf-diff-wrapper.py NLTrade_invoice")
+    sys.exit(1)
+
+project = sys.argv[1]
+date_suffix = datetime.now().strftime('%Y%m%d_%H%M%S')
+cf_build_path = os.path.join("build", project, f"{project}.cf")
+cf_temp_path = os.path.join("temp", project, f"{project}_{date_suffix}.cf")
+temp_unpack_dir = os.path.join("temp", project, f"{project}_{date_suffix}")
+
+# 1. Упаковка исходников через PowerShell-скрипт
+print("[1/4] Упаковка исходников...")
+res = subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-File", ".github/skills/v8-cf-v8pack/tools/cf-v8pack.ps1", project])
+if not os.path.exists(cf_build_path):
+    print(f"Не удалось создать cf-файл: {cf_build_path}")
+    sys.exit(1)
+
+# 2. Копирование cf в temp
+print("[2/4] Копирование cf-файла в temp...")
+os.makedirs(os.path.dirname(cf_temp_path), exist_ok=True)
+with open(cf_build_path, 'rb') as src, open(cf_temp_path, 'wb') as dst:
+    dst.write(src.read())
+
+# 3. Распаковка cf во временную папку через v8unpack.exe напрямую
+print("[3/4] Распаковка cf-файла...")
+import json as _json
+with open("v8.projects.json", encoding="utf-8-sig") as f:
+    cfg = _json.load(f)
+v8unpack_exe = cfg["tools"]["v8unpack"]
+os.makedirs(temp_unpack_dir, exist_ok=True)
+res = subprocess.run([v8unpack_exe, "-E", cf_temp_path, temp_unpack_dir])
+if res.returncode != 0 or not os.path.exists(temp_unpack_dir) or not os.listdir(temp_unpack_dir):
+    print(f"Не удалось распаковать cf-файл: {temp_unpack_dir}")
+    sys.exit(1)
+
+# 4. Сравнение исходников и распакованной папки
+print("[4/4] Сравнение исходников и распакованной папки...")
+res = subprocess.run(["python", "tools/v8_src_comparer/v8_src_comparer.py", os.path.join("src", project), temp_unpack_dir])
+
+print("Проверка завершена. См. результат сравнения.")
