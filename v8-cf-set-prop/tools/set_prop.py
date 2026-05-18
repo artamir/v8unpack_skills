@@ -23,6 +23,7 @@ CONFIG_FILE = 'Configuration.json'
 # Path inside Configuration.json to the parameters array
 CONFIG_PARAMS_PATH = ['header', 0, 3, 1, 1]
 MAIN_LAUNCH_MODE_INDEX = 21
+USE_MANAGED_FORMS_INDEX = 28
 USAGE_PURPOSE_INDEX = 33
 USAGE_PURPOSE_UUID = '1708fdaa-cbce-4289-b373-07a5a74bee91'
 
@@ -57,10 +58,28 @@ USAGE_PURPOSE_DISPLAY = {
     '2': 'Приложение для мобильной платформы',
 }
 
+USE_MANAGED_FORMS_BY_NAME = {
+    'истина': '1',
+    'true': '1',
+    '1': '1',
+    'ложь': '0',
+    'false': '0',
+    '0': '0',
+}
+
+USE_MANAGED_FORMS_DISPLAY = {
+    '1': 'Истина',
+    '0': 'Ложь',
+}
+
 PROPERTY_ALIASES = {
     'main_launch_mode': 'main_launch_mode',
     'основнойрежимзапуска': 'main_launch_mode',
     'launchmode': 'main_launch_mode',
+    'use_managed_forms_in_ordinary_application': 'use_managed_forms_in_ordinary_application',
+    'использоватьуправляемыеформывобычномприложении': 'use_managed_forms_in_ordinary_application',
+    'usemanagedfromsinordinaryapplication': 'use_managed_forms_in_ordinary_application',
+    'usemanagedforms': 'use_managed_forms_in_ordinary_application',
     'usage_purpose': 'usage_purpose',
     'назначениеиспользования': 'usage_purpose',
     'usagepurpose': 'usage_purpose',
@@ -116,6 +135,10 @@ def _augment_from_config(props, source_dir):
         props['main_launch_mode'] = str(params[MAIN_LAUNCH_MODE_INDEX])
         print(f'[set_prop] Извлечено из {CONFIG_FILE}: main_launch_mode = {props["main_launch_mode"]}')
 
+    if 'use_managed_forms_in_ordinary_application' not in props and len(params) > USE_MANAGED_FORMS_INDEX:
+        props['use_managed_forms_in_ordinary_application'] = str(params[USE_MANAGED_FORMS_INDEX])
+        print(f'[set_prop] Извлечено из {CONFIG_FILE}: use_managed_forms_in_ordinary_application = {props["use_managed_forms_in_ordinary_application"]}')
+
     if 'usage_purpose_indices' not in props and len(params) > USAGE_PURPOSE_INDEX:
         block = params[USAGE_PURPOSE_INDEX]
         if isinstance(block, list):
@@ -149,6 +172,7 @@ def ensure_properties(source_dir):
             'source': CONFIG_FILE,
             'raw_paths': {
                 'main_launch_mode': f'header[0][3][1][1][{MAIN_LAUNCH_MODE_INDEX}]',
+                'use_managed_forms_in_ordinary_application': f'header[0][3][1][1][{USE_MANAGED_FORMS_INDEX}]',
                 'usage_purpose': f'header[0][3][1][1][{USAGE_PURPOSE_INDEX}]',
             },
         }
@@ -178,6 +202,16 @@ def _set_main_launch_mode(props, value):
         raise ValueError(f'Неизвестное значение «{value}». Допустимые: {allowed}')
     props['main_launch_mode'] = raw
     return MAIN_LAUNCH_MODE_DISPLAY.get(raw, raw)
+
+
+def _set_use_managed_forms(props, value):
+    key = value.lower().replace(' ', '').replace('_', '')
+    raw = USE_MANAGED_FORMS_BY_NAME.get(key)
+    if raw is None:
+        allowed = ', '.join(f'"{v}"' for v in ['Истина', 'Ложь', 'true', 'false', '1', '0'])
+        raise ValueError(f'Неизвестное значение «{value}». Допустимые: {allowed}')
+    props['use_managed_forms_in_ordinary_application'] = raw
+    return USE_MANAGED_FORMS_DISPLAY.get(raw, raw)
 
 
 def _set_usage_purpose(props, value):
@@ -211,13 +245,19 @@ def set_prop(source_dir, prop, value):
     """Set *prop* to *value* in Configuration.properties.json inside *source_dir*."""
     canonical = _normalize_property(prop)
     if canonical is None:
-        known = 'main_launch_mode (ОсновнойРежимЗапуска), usage_purpose (НазначениеИспользования)'
+        known = (
+            'main_launch_mode (ОсновнойРежимЗапуска), '
+            'use_managed_forms_in_ordinary_application (ИспользоватьУправляемыеФормыВОбычномПриложении), '
+            'usage_purpose (НазначениеИспользования)'
+        )
         raise ValueError(f'Неизвестное свойство «{prop}». Поддерживаются: {known}')
 
     props = ensure_properties(source_dir)
 
     if canonical == 'main_launch_mode':
         display = _set_main_launch_mode(props, value)
+    elif canonical == 'use_managed_forms_in_ordinary_application':
+        display = _set_use_managed_forms(props, value)
     elif canonical == 'usage_purpose':
         display = _set_usage_purpose(props, value)
 

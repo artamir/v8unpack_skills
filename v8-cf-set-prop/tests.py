@@ -30,6 +30,7 @@ from v8unpack.v8unpack import build as v8build, extract as v8extract  # noqa: E4
 
 _CONFIG_PARAMS_PATH = ['header', 0, 3, 1, 1]
 MAIN_LAUNCH_MODE_IDX = 21
+USE_MANAGED_FORMS_IDX = 28
 USAGE_PURPOSE_IDX = 33
 
 
@@ -55,6 +56,10 @@ _TRANSITIONS = [
      'step_0002'),
     ('step_0002',   'main_launch_mode', 'ОбычноеПриложение',
      'step_0003'),
+    ('step_0003',   'use_managed_forms_in_ordinary_application', 'Истина',
+     'step_0004'),
+    ('step_0004',   'use_managed_forms_in_ordinary_application', 'Ложь',
+     'step_0005'),
     ('step_0000',   'usage_purpose',
      'Приложение для платформы, Приложение для мобильной платформы',
      'step_0001_1'),
@@ -128,6 +133,12 @@ class TestSetPropCFRoundtrip(unittest.TestCase):
                 ref_params[MAIN_LAUNCH_MODE_IDX],
                 built_params[MAIN_LAUNCH_MODE_IDX],
                 f'{source_step}→{target_step}: main_launch_mode mismatch after CF roundtrip',
+            )
+            self.assertEqual(
+                ref_params[USE_MANAGED_FORMS_IDX],
+                built_params[USE_MANAGED_FORMS_IDX],
+                f'{source_step}→{target_step}: use_managed_forms_in_ordinary_application '
+                'mismatch after CF roundtrip',
             )
             self.assertEqual(
                 ref_params[USAGE_PURPOSE_IDX],
