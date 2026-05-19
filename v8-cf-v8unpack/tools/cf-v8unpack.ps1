@@ -5,18 +5,25 @@ param(
     [string]$CfPath
 )
 
-$jsonPath = "e:/1CBases/NL/NL_v8unpack/v8.projects.json"
+# Читаем v8.projects.json (3 уровня вверх → workspace root)
+$jsonPath = Join-Path $PSScriptRoot "../../../v8.projects.json"
 if (!(Test-Path $jsonPath)) {
     Write-Error "Not found v8.projects.json: $jsonPath"
     exit 1
 }
 $json = Get-Content $jsonPath -Raw | ConvertFrom-Json
 
-if (-not $json.projects.$ProjectName) {
+# Поиск проекта включая подпроекты
+function Find-V8Project { param($nodes, [string]$name)
+    if ($nodes.$name) { return $nodes.$name }
+    foreach ($p in $nodes.PSObject.Properties) { if ($p.Value.projects) { $r = Find-V8Project $p.Value.projects $name; if ($r) { return $r } } }
+    return $null
+}
+$project = Find-V8Project $json.projects $ProjectName
+if (-not $project) {
     Write-Error "Project '$ProjectName' not found in v8.projects.json"
     exit 1
 }
-$project = $json.projects.$ProjectName
 
 $src = if ($TargetPath) { $TargetPath } else { $project.src }
 $current = $project.current
