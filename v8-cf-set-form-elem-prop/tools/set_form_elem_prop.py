@@ -11,11 +11,13 @@ Arguments:
     prop          Property name: width/ширина, height/высота, left/лево, top/верх.
     new_value     New value in pixels (non-negative integer).
 
-The tool modifies two files in
+The tool modifies files in
     source_dir/Catalog/<catalog_name>/CatalogForm/<form_name>/:
 
-  CatalogForm.elem.json  — geometry block (raw[3]) of the element
-  CatalogForm.json       — form revision counter (form[0][0][1][10]) +1
+  CatalogForm.elem.json       — geometry block (raw[3]) of the element
+  CatalogForm.json            — form revision counter (form[0][0][1][10]) +1
+  CatalogForm.elem-props.json — synced if the file exists (keeps it consistent
+                                 with raw so v8unpack encode does not revert the change)
 
 Anchor update rules are defined in form_elem_props.py.
 Backups (<file>.bak) are created before any modification.
@@ -31,8 +33,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from form_elem_props import resolve_prop, apply_prop, PROP_INFO  # noqa: E402
 
-_FORM_JSON      = 'CatalogForm.json'
-_FORM_ELEM_JSON = 'CatalogForm.elem.json'
+_FORM_JSON           = 'CatalogForm.json'
+_FORM_ELEM_JSON      = 'CatalogForm.elem.json'
+_FORM_ELEM_PROPS_JSON = 'CatalogForm.elem-props.json'
 
 
 # ---------------------------------------------------------------------------
@@ -72,8 +75,12 @@ def _find_elem_key(data_keys, elem_name):
 # Core operation
 # ---------------------------------------------------------------------------
 
-def set_elem_prop(elem_json_path, form_json_path, elem_name, prop, new_value):
+def set_elem_prop(elem_json_path, form_json_path, elem_name, prop, new_value,
+                  elem_props_json_path=None):
     """Read, modify, and save elem.json + form.json for a single property change.
+
+    Also updates elem-props.json (if it exists / *elem_props_json_path* given)
+    so that it stays consistent with raw during subsequent v8unpack encode.
 
     Returns (key, canon_prop, old_val, new_val).
     Raises ValueError on unknown property or element not found.
@@ -114,6 +121,21 @@ def set_elem_prop(elem_json_path, form_json_path, elem_name, prop, new_value):
     _save_json(elem_json_path, elem_data)
     _save_json(form_json_path, form_data)
 
+    # Sync CatalogForm.elem-props.json if it exists, to prevent v8unpack
+    # encode from reverting the change (elem-props.json takes precedence there).
+    if elem_props_json_path and os.path.isfile(elem_props_json_path):
+        ru_key = PROP_INFO[canon]['label_ru']  # e.g. 'Ширина'
+        try:
+            ep_data = _load_json(elem_props_json_path)
+            if isinstance(ep_data, dict) and key in ep_data:
+                _backup(elem_props_json_path)
+                ep_data[key][ru_key] = new_val
+                _save_json(elem_props_json_path, ep_data)
+                print('[set_form_elem_prop] elem-props.json synced: %s.%s = %d' % (
+                    key, ru_key, new_val))
+        except Exception as e:
+            print('[set_form_elem_prop] Warning: could not sync elem-props.json: %s' % e)
+
     info = PROP_INFO[canon]
     print('[set_form_elem_prop] %s.%s (%s): %d -> %d' % (
         key, canon, info['label_ru'], old_val, new_val))
@@ -151,13 +173,15 @@ def _main():
 
     elem_json = os.path.join(form_dir, _FORM_ELEM_JSON)
     form_json = os.path.join(form_dir, _FORM_JSON)
+    elem_props_json = os.path.join(form_dir, _FORM_ELEM_PROPS_JSON)
     for path in (elem_json, form_json):
         if not os.path.isfile(path):
             print('Error: file not found: %s' % path, file=sys.stderr)
             sys.exit(1)
 
     try:
-        set_elem_prop(elem_json, form_json, args.elem_name, args.prop, args.new_value)
+        set_elem_prop(elem_json, form_json, args.elem_name, args.prop, args.new_value,
+                      elem_props_json_path=elem_props_json)
     except ValueError as e:
         print('Error: %s' % e, file=sys.stderr)
         sys.exit(1)
